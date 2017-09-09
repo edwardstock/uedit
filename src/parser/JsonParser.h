@@ -13,6 +13,7 @@
 #include "json.hpp"
 #include <fstream>
 #include <regex>
+#include "cpphelpers.h"
 
 using json = nlohmann::json;
 

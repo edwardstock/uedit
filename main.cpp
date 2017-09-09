@@ -9,18 +9,18 @@
  *
  * Usage:
  *
- * uedit [mode: edit, search(s), comment(c)] !filename! [options]
+ * uedit [command: edit, search(s), comment(c)] !filename! [options]
  *
  * global options:
  *  -f,--force    force, overwrite all, be careful!
  *  -h,-?         this help
  *
  *
- * edit or empty mode:
+ * edit or empty command:
  *  Example:
  *      ./uedit /path/to/config.ini -k post_max_size -v 1G
  *      ./uedit edit /path/to/config.ini -l 4 -v Off
- *      ./uedit /path/to/custom.config -s post_max_size -v "post_max_size=1G" (example how to overwrite whole found line)
+ *      ./uedit edit /path/to/custom.config post_max_size -v "post_max_size=1G" (example how to overwrite whole found line)
  *
  *  -v,--value    value to set
  *  -k,--key      key
@@ -30,14 +30,14 @@
  *
  * search (shortcut: s):
  *  Example:
- *      ./uedit search /path/to/config.ini -s stringToFind
+ *      ./uedit search /path/to/config.ini stringToFind
  *  -b,--buffer    Number of lines to show around found row
  *
  * comment (shortcut: c):
  *  Example:
  *      ./uedit comment /path/to/config.ini -l 45
- *      ./uedit comment /path/to/config.ini -s post_max_size
- *      ./uedit comment /path/to/custom.superconfig -s my_custom_line -c "//"
+ *      ./uedit comment /path/to/config.ini post_max_size
+ *      ./uedit comment /path/to/custom.superconfig my_custom_line -c "//"
  *
  *  -l,--line      Line to comment
  *  -s,--search    Search row and comment it
@@ -49,144 +49,274 @@
  */
 
 #include <list>
-#include "cmdline.hpp"
+#include <cmdline.hpp>
 #include "json.hpp"
-#include "Strings.hpp"
+#include "cpphelpers.h"
+#include "src/editor/Search.h"
 #include "src/editor/Editor.h"
 
-using namespace cmdline;
 using namespace std;
-using arg =
 
 using json = nlohmann::json;
 
-int edit(int argc, char **argv);
-int search(int argc, char **argv);
-int comment(int argc, char **argv);
+int edit(int argc, char** argv, cmdline::parser* parser, std::string& file, std::string& searchQuery);
+int search(int argc, char** argv, cmdline::parser* parser, std::string& file, std::string& searchQuery);
+int comment(int argc, char** argv, cmdline::parser* parser, std::string& file);
+
+enum Command {
+	EDIT,
+	SEARCH,
+	COMMENT
+};
+
+const map<string, Command> commands = {
+		make_pair("edit", Command::EDIT),
+		make_pair("e", Command::EDIT),
+		make_pair("search", Command::SEARCH),
+		make_pair("s", Command::SEARCH),
+		make_pair("comment", Command::COMMENT),
+		make_pair("c", Command::COMMENT),
+};
+
+bool getCommand(const vector<string>& vars, Command& found, int* position)
+{
+	int i = 0;
+	for (auto& r: vars) {
+		for (auto& m: commands) {
+			if (m.first==r) {
+				*position = i;
+				found = m.second;
+				return true;
+			}
+		}
+		i++;
+	}
+
+	found = Command::EDIT;
+	return false;
+}
+
+const string commandUsage()
+{
+	std::ostringstream str;
+	str << "\n\ncommands:\n";
+	str << "  edit    (default)     - can be empty, editing config\n";
+	str << "  search  (shortcut: s) - to search certain line (Indistinct search)\n";
+	str << "  comment (shortcut: c) - to comment/uncomment config line\n";
+
+	return str.str();
+}
+
+const string topLine(const char* bin)
+{
+	std::ostringstream str;
+	str << "[optional:command...] [filePath...] [optional:search...] [options]\n\n";
+	str << "usage example:\n";
+	str << "Edit:\n";
+	str <<
+	    "    " << bin << " /path/to/config.ini -k post_max_size -v 1G\n"
+			    "    " << bin << " edit /path/to/config.ini -l 4 -v Off\n"
+			    "    " << bin
+	    << " /path/to/custom.config post_max_size -v \"post_max_size=1G\" (example how to overwrite whole found line)\n";
+
+	str << "Search:\n";
+	str << "    " << bin << " search /path/to/config.ini stringToFind\n";
+	str << "    " << bin << " search /path/to/config.ini \"escaped string\"\n";
+
+	str << "Comment:\n";
+	str <<
+	    "    " << bin << " comment /path/to/config.ini -l 45\n"
+			    "    " << bin << " comment /path/to/config.ini post_max_size\n"
+			    "    " << bin << " comment /path/to/custom.superconfig my_search_line -c \"//\"";
+
+	str << endl;
+	return str.str();
+}
 
 int main(int argc, char **argv) {
-	auto *args = new cmdline::parser();
-	args->set_program_name("UEDIT 1.0");
 
-	delete args;
+	cmdline::parser parser;
+
+	parser.setUsageTopLine(topLine(*argv));
+	parser.setOptionsPrefix("global");
+	parser.footer(commandUsage());
+
+	parser.add("help", 'h', "Use: uedit [command] -h[--help] to see command options");
+
+	//command
+
+	parser.parse(argc, argv);
+
+	unsigned long optionsSize = parser.rest().size();
+	if (optionsSize<1) {
+		cout << parser.usage() << endl;
+		return 0;
+	}
+
+	Command command;
+	string file;
+	string searchQuery;
+
+	int commandPosition = 0;
+	bool hasModeArg = getCommand(parser.rest(), command, &commandPosition);
+
+	int optionPositionOffset = static_cast<int>(hasModeArg);
+	if (optionsSize-1>=optionPositionOffset) {
+		file = parser.rest()[(int) hasModeArg];
+	}
+	optionPositionOffset++;
+
+	if (optionsSize-1>=optionPositionOffset) {
+		searchQuery = parser.rest()[optionPositionOffset];
+		if (!searchQuery.empty() && searchQuery.c_str()[0]=='-') {
+			searchQuery.clear();
+		}
+	}
+
+	int retval = 0;
+	switch (command) {
+	case EDIT: retval = edit(argc, argv, &parser, file, searchQuery);
+		break;
+	case SEARCH: retval = search(argc, argv, &parser, file, searchQuery);
+		break;
+	case COMMENT: retval = comment(argc, argv, &parser, file);
+		break;
+	default: cerr << "Unknown command" << endl;
+		cerr << commandUsage() << endl;
+		retval = 1;
+
+	}
+
+	return retval;
+}
+
+int edit(int argc, char** argv, cmdline::parser* parser, std::string& file, std::string& searchQuery)
+{
+	parser->setOptionsPrefix("edit");
+	parser->add<string>("key", 'k', "Key", false);
+	parser->add<string>("value", 'v', "String value", true);
+	parser->add<int>("line", 'l', "Line number (use instead key, if you know exact line)", false);
+	parser->add<bool>("force", 'f', "Overwrite existed value", false, false);
+
+	if (parser->exist("help")) {
+		cout << parser->usage() << endl;
+		return 0;
+	}
+
+	parser->parse_check(argc, argv);
+
+	string value = parser->get<string>("value");
+	bool force = parser->exist("force") && parser->get<bool>("force");
+	long line = -1;
+
+	string searchResult;
+	if (!parser->exist("key") && !searchQuery.empty()) {
+		Search s(file, 0);
+
+		if (s.find(searchQuery, searchResult, nullptr)<1) {
+			cerr << "Can't find \"" << searchQuery << "\" in " << "\"" << file << "\"" << endl;
+			return 0;
+		}
+
+		line = s.getResultLine();
+	}
+
+	Editor editor(file);
+
+	if (!parser->exist("key") && !searchResult.empty()) {
+		cout << searchResult << endl;
+	}
+
+	stringstream ss;
+	ss << "Set value \"";
+	ss << value;
+	ss << "\"";
+	if (parser->exist("key")) {
+		ss << " to key " << parser->get<string>("key");
+	}
+	else if (parser->exist("line") || line>0) {
+		ss << " to line \"" << line << "\"";
+	} else {
+		ss << " to whole file";
+	}
+	ss << "?";
+
+	if (!force) {
+		if (!cpphelpers::console::confirm(cin, cout, ss.str())) {
+			cout << "\nEdit canceled" << endl;
+			return 0;
+		}
+	}
+
+	if (parser->exist("key")) {
+		string key = parser->get<string>("key");
+		editor.set(key, value);
+	}
+	else if (parser->exist("line") || line>0) {
+		editor.set(line, value);
+	}
+	else {
+		editor.set(value);
+	}
+
 	return 0;
 }
 
-int edit(cmdline::parser *args, int argc, char **argv) {
+int search(int argc, char** argv, cmdline::parser* parser, std::string& file, std::string& searchQuery)
+{
+	parser->setOptionsPrefix("search");
 
-	int line = -1;
-	bool overwrite = true;
+	parser->add<int>("buffer",
+			'b',
+			"Buffer size for search - Number of lines to show around found config line",
+			false,
+			3);
 
-	args->add<string>("input", 'i', "Input file", true);
-	args->add<string>("key", 'k', "Key - config key", false);
-	args->add<string>("value", 'v', "Value", true);
-	args->add<int>("line", 'l', "Line number (use instead key, if you know exact line)", false, line);
-	args->add<bool>("force", 'f', "Overwrite existed value", false, overwrite);
+	parser->add<bool>("ignore-case", 'i', "Search ignore case", false, false);
+	parser->add<bool>("no-long-lines", 'c', "Cut long lines to 120 characters", false, false);
 
-	args->parse_check(argc, argv);
+	if (parser->exist("help")) {
+		cout << parser->usage() << endl;
+		return 0;
+	}
 
-	if (!args->exist("input")) {
+	if (file.empty()) {
+		cerr << "File path is empty!" << endl;
+		return 0xFF;
+	}
+
+	if (searchQuery.empty()) {
+		cerr << "Search query is empty!" << endl;
+		return 0xFF;
+	}
+
+	Search search(file, parser->get<int>("buffer"));
+	search.setIgnoreCase(parser->exist("ignore-case") || parser->get<bool>("ignore-case")!=0);
+	search.setClipLongLines(parser->exist("no-long-lines") || parser->get<bool>("no-long-lines")!=0);
+
+	parser->parse(argc, argv);
+
+	bool ne = parser->exist("no-long-lines");
+	bool nb = parser->get<bool>("no-long-lines")!=0;
+
+	std::string res;
+	long found = search.find(searchQuery, res, nullptr);
+
+	if (found<0) {
+		cout << "Nothings found" << endl;
 		return 1;
 	}
 
-	string input = args->get<string>("input");
-	string val = args->get<string>("value");
+	cout << res << endl;
 
-	auto *editor = new Editor(input);
-
-	if (args->exist("key")) {
-		string key = args->get<string>("key");
-		editor->set(key, val);
-	} else if (args->exist("line")) {
-		editor->set(args->get<int>("line"), val);
-	} else {
-		editor->set(val);
-	}
-
-	delete args, editor;
+	return 0;
 }
-int search(int argc, char **argv) {
-	string s = "post";
-	string filename = "/etc/php.ini.default";
-	ifstream f(filename);
-	if (!f.is_open() || f.bad()) {
-		perror("error while opening file");
-		return 1;
-	}
-
-	string row;
-	const int padding = 3;
-	const int bufferSize = padding * 2 + 1; // top lines + bottom lines + found line
-
-	unsigned long line = 1;
-	vector<SearchResult *> results;
-	int unbufferedResults = 0;
-
-	deque<string> buffer;
-
-	while (std::getline(f, row)) {
-
-		if (buffer.size() > padding + 1) {
-			// remove top element, to prevent buffer overflowing
-			buffer.pop_front();
-		}
-		// add bottom element
-		buffer.push_back(row);
-
-
-		// if in results list has a rows, where buffered lines not filled enought (see bufferSize)
-		if (unbufferedResults > 0) {
-			for (auto &r: results) {
-				if (r->rowsBuffer.size() < bufferSize) {
-					r->rowsBuffer.push_back(row);
-					// if after adding row buffer size filled enought, decrement count of unbuffered items
-					if (r->rowsBuffer.size() == bufferSize) {
-						unbufferedResults--;
-					}
-				}
-			}
-		}
-
-		if (Strings::hasSubstring(row, s)) {
-			results.push_back(new SearchResult(line));
-			unbufferedResults++;
-
-			// fill result's buffered rows, put last (padding) lines + 1 (found row)
-			size_t idx = buffer.size() - 1;
-			while (results.back()->rowsBuffer.size() < padding + 1) {
-				if (idx == 0) break;
-				results.back()->rowsBuffer.push_front(buffer[idx]);
-				idx--;
-			}
-		}
-
-		line++;
-	}
-
-	cout << "Searching for \"" << s << "\" in \"" << filename << "\"" << endl;
-	for (auto &r: results) {
-		cout << "Found line: " << r->line << endl;
-		int i = (-padding);
-		while (!r->rowsBuffer.empty()) {
-			cout << (r->line + i) << "\t";
-			if ((r->line + i) == r->line) {
-				cout << "--> " << r->rowsBuffer.front() << endl;
-			} else {
-				cout << r->rowsBuffer.front() << endl;
-			}
-			r->rowsBuffer.pop_front();
-			i++;
-
-			if ((r->line + i) >= line) {
-				cout << "--EOF--" << endl;
-			}
-		}
-
-		cout << endl;
-
-		delete r;
-	}
-}
-int comment(int argc, char **argv) {
-
+int comment(int argc, char** argv, cmdline::parser* parser, std::string& file)
+{
+	parser->setOptionsPrefix("comment");
+	parser->add<string>("char",
+			'c',
+			"Character for commenting. By default, \"uedit\" try to determine how to comment file, if not, prompt will ask you for required character",
+			false);
+	return 0;
 }

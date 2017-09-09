@@ -7,8 +7,6 @@
  */
 
 #include "JsonParser.h"
-#include "Strings.hpp"
-#include "Numbers.hpp"
 
 using namespace std;
 JsonParser::JsonParser(std::string &file) : FileParser(file) {

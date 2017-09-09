@@ -10,6 +10,7 @@
 #define UEDIT_EDITOR_H
 
 #include <string>
+#include <cpphelpers.h>
 #include "../parser/FileParser.h"
 class Editor {
   private:
@@ -19,7 +20,7 @@ class Editor {
 	explicit Editor(std::string &filePath);
 	~Editor();
 
-	void set(int line, std::string &value);
+	void set(long line, std::string& value);
 	void set(std::string &key, std::string &value);
 	void set(std::string &value);
 };

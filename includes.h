@@ -9,7 +9,7 @@
 #ifndef UEDIT_INCLUDES_H
 #define UEDIT_INCLUDES_H
 
-#include "Collections.hpp"
-#include "Strings.hpp"
+#include "cpphelpers/src/Collections.cpp"
+#include "cpphelpers/src/Strings.cpp"
 
 #endif //UEDIT_INCLUDES_H

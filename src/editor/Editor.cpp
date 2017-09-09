@@ -7,7 +7,6 @@
  */
 
 #include "Editor.h"
-#include "Strings.hpp"
 #include "../parser/IniParser.h"
 #include "../parser/JsonParser.h"
 #include "../parser/ConfParser.h"
@@ -15,6 +14,7 @@ Editor::Editor(std::string &filePath) {
 
 	if (Strings::hasSubstring(filePath, ".ini")) {
 		fileParser = new IniParser(filePath);
+		((IniParser*) fileParser)->dump();
 	} else if (Strings::hasSubstring(filePath, ".json")) {
 		fileParser = new JsonParser(filePath);
 	} else {
@@ -26,7 +26,8 @@ Editor::~Editor() {
 	delete fileParser;
 }
 
-void Editor::set(int line, std::string &value) {
+void Editor::set(long line, std::string& value)
+{
 
 }
 void Editor::set(std::string &key, std::string &value) {

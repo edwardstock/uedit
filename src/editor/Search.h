@@ -14,66 +14,109 @@
 #include <list>
 #include <deque>
 #include <vector>
+#include <cpphelpers.h>
+#include <sstream>
+#include <functional>
+using namespace std;
+
+struct SearchResult {
+public:
+	explicit SearchResult(unsigned long line)
+	{
+		this->line = line;
+	}
+	long line;
+	std::list<std::string> rowsBuffer;
+};
 
 class Search {
-  public:
-	struct SearchResult {
-	  explicit SearchResult(unsigned long line) {
-		  this->line = line;
-	  }
-	  unsigned long line;
-	  std::list<std::string> rowsBuffer;
-	};
+public:
+	typedef std::function<bool(const bool icase, const string&, const string&)> SearchComparator;
 
-	explicit Search(std::string &file, const unsigned int padding) : file(file),
-	                                                                 bufferPadding(padding) {
+	const static SearchComparator CMP_SUBSTRING;
 
+	explicit Search(std::string& file, const int padding)
+			:
+			file(std::move(file)),
+			comparator(CMP_SUBSTRING)
+	{
+		if (padding<=0) {
+			bufferPadding = 0;
+		}
+		else {
+			bufferPadding = padding;
+		}
 	}
 
-	Search(const Search &&from) noexcept:
-		file(from.file),
-		input(from.input),
-		bufferPadding(from.bufferPadding) {
+	Search(const Search&& from) noexcept
+			:
+			file(from.file),
+			bufferPadding(from.bufferPadding)
+	{
 
-		if (this == &from) {
+		if (this==&from) {
 			return;
 		}
 
-		for (auto &r: results) {
+		input.open(file);
+
+		for (auto& r: results) {
 			delete r;
 		}
 
 		results.clear();
-		for (auto &r: from.results) {
+		for (auto& r: from.results) {
 			results.push_back(r);
 		}
 
-		for (auto &r: from.results) {
+		for (auto& r: from.results) {
 			delete r;
 		}
-
-		from.results.clear();
 	}
 
-	Search(const Search &from) noexcept:
-		file(from.file),
-		input(from.input),
-		bufferPadding(from.bufferPadding) {
-		for (auto &r: results) {
+	Search(const Search& from) noexcept
+			:
+			file(from.file),
+			bufferPadding(from.bufferPadding)
+	{
+
+		input.open(file);
+		for (auto& r: results) {
 			delete r;
 		}
 		results.clear();
-		for (auto &r: from.results) {
+		for (auto& r: from.results) {
 			results.push_back(r);
 		}
 	}
 
-	~Search() {
-		for (auto &r: results) {
+	~Search()
+	{
+		for (auto& r: results) {
 			delete r;
 		}
 
 		results.clear();
+	}
+
+	void setIgnoreCase(bool i)
+	{
+		ignoreCase = i;
+	}
+
+	void setClipLongLines(bool c)
+	{
+		clipLongLines = c;
+	}
+
+	bool compare(const string& first, const string& second)
+	{
+		return comparator(ignoreCase, first, second);
+	}
+
+	void setComparator(SearchComparator& searchComparator)
+	{
+		comparator = std::move(searchComparator);
 	}
 
 	/**
@@ -82,17 +125,21 @@ class Search {
 	 * @param result
 	 * @return Size of found items or -1 if error occurred
 	 */
-	long find(const std::string &query, std::string &result, std::string *error = nullptr);
-	const std::vector<SearchResult *> getResults();
+	long find(const std::string& query, std::string& result, std::string* error = nullptr);
+	const std::vector<SearchResult*> getResults();
 	const long getResultsCount();
+	const long getResultLine();
 
-  private:
-	unsigned int getBufferSize();
-
+private:
+	SearchComparator comparator;
+	int getBufferSize();
+	bool ignoreCase = false;
+	bool clipLongLines = false;
 	std::string file;
 	std::ifstream input;
-	unsigned int bufferPadding = 3;
-	std::vector<SearchResult *> results;
+	int bufferPadding = 3;
+	std::vector<SearchResult*> results;
+	long resultLine = 0;
 };
 
 #endif //UEDIT_SEARCH_H
