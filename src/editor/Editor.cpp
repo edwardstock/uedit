@@ -12,10 +12,11 @@
 #include "../parser/ConfParser.h"
 Editor::Editor(std::string &filePath) {
 
-	if (Strings::hasSubstring(filePath, ".ini")) {
+	if (cpphelpers::strings::hasSubstring(filePath, ".ini")) {
 		fileParser = new IniParser(filePath);
 		((IniParser*) fileParser)->dump();
-	} else if (Strings::hasSubstring(filePath, ".json")) {
+	}
+	else if (cpphelpers::strings::hasSubstring(filePath, ".json")) {
 		fileParser = new JsonParser(filePath);
 	} else {
 		fileParser = new ConfParser(filePath);

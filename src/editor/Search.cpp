@@ -8,8 +8,8 @@
 
 #include "Search.h"
 
-const Search::SearchComparator Search::CMP_SUBSTRING = [](const bool icase, const string& a, const string& b) {
-	return icase ? Strings::hasSubstringIgnoreCase(a, b) : Strings::hasSubstring(a, b);
+Search::SearchComparator Search::CMP_SUBSTRING = [](const bool icase, const string& a, const string& b) {
+	return icase ? cpphelpers::strings::hasSubstringIgnoreCase(a, b) : cpphelpers::strings::hasSubstring(a, b);
 };
 
 long Search::find(const std::string& query, std::string& result, std::string* error)
@@ -56,7 +56,8 @@ long Search::find(const std::string& query, std::string& result, std::string* er
 			}
 		}
 
-		bool cmp = ignoreCase ? Strings::hasSubstringIgnoreCase(row, query) : Strings::hasSubstring(row, query);
+		bool cmp = ignoreCase ? cpphelpers::strings::hasSubstringIgnoreCase(row, query)
+		                      : cpphelpers::strings::hasSubstring(row, query);
 
 		if (cmp) {
 			results.push_back(new SearchResult(line));
@@ -70,7 +71,7 @@ long Search::find(const std::string& query, std::string& result, std::string* er
 				string r = buffer[idx];
 				if (clipLongLines && r.length()>120) {
 					r = "...";
-					r.append(Strings::clipSubstring(row, query, 110));
+					r.append(cpphelpers::strings::clipSubstring(row, query, 110));
 					r.append("...");
 				}
 				results.back()->rowsBuffer.push_front(r);

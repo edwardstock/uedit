@@ -19,7 +19,7 @@ JsonParser::~JsonParser() {
 }
 
 void JsonParser::set(const std::string &key, const std::string &value) {
-	vector<string> path = Strings::split(key, '.');
+	vector<string> path = cpphelpers::strings::split(key, '.');
 
 	if (path.size() == 1) {
 		inferredValue(object[key], value);
@@ -73,9 +73,11 @@ void JsonParser::inferredValue(json &element, std::string value) {
 	try {
 		if (value == "null") {
 			element = nullptr;
-		} else if (Numbers::isInteger(value)) {
+		}
+		else if (cpphelpers::numbers::isInteger(value)) {
 			element = std::stoi(value);
-		} else if (Numbers::isReal(value)) {
+		}
+		else if (cpphelpers::numbers::isReal(value)) {
 			element = std::stof(value);
 		} else {
 			element = value;

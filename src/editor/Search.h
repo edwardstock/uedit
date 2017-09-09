@@ -33,13 +33,13 @@ class Search {
 public:
 	typedef std::function<bool(const bool icase, const string&, const string&)> SearchComparator;
 
-	const static SearchComparator CMP_SUBSTRING;
+	static SearchComparator CMP_SUBSTRING;
 
 	explicit Search(std::string& file, const int padding)
 			:
-			file(std::move(file)),
-			comparator(CMP_SUBSTRING)
+			file(std::move(file))
 	{
+		setComparator(Search::CMP_SUBSTRING);
 		if (padding<=0) {
 			bufferPadding = 0;
 		}
@@ -114,9 +114,9 @@ public:
 		return comparator(ignoreCase, first, second);
 	}
 
-	void setComparator(SearchComparator& searchComparator)
+	void setComparator(Search::SearchComparator& searchComparator)
 	{
-		comparator = std::move(searchComparator);
+		comparator = searchComparator;
 	}
 
 	/**
@@ -131,7 +131,7 @@ public:
 	const long getResultLine();
 
 private:
-	SearchComparator comparator;
+	Search::SearchComparator comparator;
 	int getBufferSize();
 	bool ignoreCase = false;
 	bool clipLongLines = false;

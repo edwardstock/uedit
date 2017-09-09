@@ -47,7 +47,7 @@ void IniParser::parse()
 		}
 
 		// searching for section pattern in row
-		string mSection = Strings::matchRegexpFirst(sectionReg, row);
+		string mSection = cpphelpers::strings::matchRegexpFirst(sectionReg, row);
 
 		if (!mSection.empty() && row.c_str()[0]==';') {
 			line++;
@@ -55,7 +55,7 @@ void IniParser::parse()
 		}
 
 		// searching for key([])=value pattern in row
-		smatch mRow = Strings::matchRegexp(rowReg, row);
+		smatch mRow = cpphelpers::strings::matchRegexp(rowReg, row);
 
 		// if is not a section and key=value detected and size of matches is correct, writing value to section
 		if (mSection.empty() && !mRow.empty() && mRow.size()==3) {
@@ -70,9 +70,9 @@ void IniParser::parse()
 			}
 
 			IniRow iniRow(key, IniValue(value), line);
-			iniRow.setIsCommented(Strings::hasRegex(R"((?:\;|\#))", row));
+			iniRow.setIsCommented(cpphelpers::strings::hasRegex(R"((?:\;|\#))", row));
 			rows.push_back(&iniRow);
-			if (sections[lastSection]->hasRowKey(iniRow) && Strings::hasRegex(R"((\[\]))", row)) {
+			if (sections[lastSection]->hasRowKey(iniRow) && cpphelpers::strings::hasRegex(R"((\[\]))", row)) {
 				// We found array. Why? In current section already added a value with the same key
 				sections[lastSection]
 						->getRow(iniRow)
